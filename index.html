@@ -8,8 +8,8 @@
         TATTOO SERVICES<br>CHEAP<br>IM LEARNING
     </div>
     
-    <canvas id="canvas" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 1px solid black; cursor: crosshair;"></canvas>
-    <canvas id="particles" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;"></canvas>
+    <canvas id="canvas" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; cursor: crosshair; z-index: 10;"></canvas>
+    <canvas id="particles" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 20;"></canvas>
     
     <script>
         const canvas = document.getElementById('canvas');
@@ -39,44 +39,53 @@
         const gridSize = 20;
         let grid = {};
         
+        // Set canvas to full window size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+            
+            // Clear and redraw background
+            ctx.fillStyle = '#f8f8f8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (img.complete && img.naturalWidth > 0) {
+                // Center the image
+                const maxWidth = window.innerWidth * 0.6;
+                const maxHeight = window.innerHeight * 0.6;
+                let scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+                
+                const scaledWidth = img.width * scale;
+                const scaledHeight = img.height * scale;
+                const offsetX = (canvas.width - scaledWidth) / 2;
+                const offsetY = (canvas.height - scaledHeight) / 2;
+                
+                ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            } else {
+                // Create drawable area everywhere
+                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    imageData.data[i + 3] = 255; // Make all pixels drawable
+                }
+            }
+        }
+        
         // Load image without frame requirement
         img.onload = function() {
-            const maxWidth = window.innerWidth * 0.6;
-            const maxHeight = window.innerHeight * 0.6;
-            
-            let scale = Math.min(maxWidth / img.width, maxHeight / img.height);
-            
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
-            particleCanvas.width = canvas.width;
-            particleCanvas.height = canvas.height;
-            
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            resizeCanvas();
         };
         
         img.onerror = function() {
-            const maxWidth = window.innerWidth * 0.6;
-            const maxHeight = window.innerHeight * 0.6;
-            
-            canvas.width = Math.min(500, maxWidth);
-            canvas.height = Math.min(500, maxHeight);
-            particleCanvas.width = canvas.width;
-            particleCanvas.height = canvas.height;
-            
-            ctx.fillStyle = '#f8f8f8';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#333';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Image not found - Draw anywhere!', canvas.width/2, canvas.height/2);
-            
-            // Create fake image data for drawing anywhere
-            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            for (let i = 0; i < imageData.data.length; i += 4) {
-                imageData.data[i + 3] = 255; // Make all pixels drawable
-            }
+            resizeCanvas();
         };
+        
+        // Handle window resize
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Initial resize
+        resizeCanvas();
         
         img.src = '1.png';
         
@@ -123,14 +132,18 @@
                 this.x += this.vx;
                 this.y += this.vy;
                 
-                // Boundary collision with some stickiness
+                // Boundary collision with smooth edge behavior
                 if (this.x < this.size) {
                     this.x = this.size;
-                    this.vx *= -0.3;
+                    this.vx *= -0.4;
                 }
                 if (this.x > canvas.width - this.size) {
                     this.x = canvas.width - this.size;
-                    this.vx *= -0.3;
+                    this.vx *= -0.4;
+                }
+                if (this.y < this.size) {
+                    this.y = this.size;
+                    this.vy *= -0.3;
                 }
                 if (this.y > canvas.height - this.size) {
                     this.y = canvas.height - this.size;
