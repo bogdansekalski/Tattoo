@@ -19,6 +19,10 @@
         
         let img = new Image();
         let imageData;
+        let imageOffsetX = 0;
+        let imageOffsetY = 0;
+        let imageScaledWidth = 0;
+        let imageScaledHeight = 0;
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
@@ -46,9 +50,8 @@
             particleCanvas.width = window.innerWidth;
             particleCanvas.height = window.innerHeight;
             
-            // Clear and redraw background
-            ctx.fillStyle = '#f8f8f8';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             if (img.complete && img.naturalWidth > 0) {
                 // Center the image
@@ -56,19 +59,22 @@
                 const maxHeight = window.innerHeight * 0.6;
                 let scale = Math.min(maxWidth / img.width, maxHeight / img.height);
                 
-                const scaledWidth = img.width * scale;
-                const scaledHeight = img.height * scale;
-                const offsetX = (canvas.width - scaledWidth) / 2;
-                const offsetY = (canvas.height - scaledHeight) / 2;
+                imageScaledWidth = img.width * scale;
+                imageScaledHeight = img.height * scale;
+                imageOffsetX = (canvas.width - imageScaledWidth) / 2;
+                imageOffsetY = (canvas.height - imageScaledHeight) / 2;
                 
-                ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
-                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, imageOffsetX, imageOffsetY, imageScaledWidth, imageScaledHeight);
+                
+                // Get image data only for the image area for alpha checking
+                imageData = ctx.getImageData(imageOffsetX, imageOffsetY, imageScaledWidth, imageScaledHeight);
             } else {
-                // Create drawable area everywhere
-                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    imageData.data[i + 3] = 255; // Make all pixels drawable
-                }
+                // No image loaded - no drawable area
+                imageData = null;
+                imageScaledWidth = 0;
+                imageScaledHeight = 0;
+                imageOffsetX = 0;
+                imageOffsetY = 0;
             }
         }
         
@@ -78,7 +84,15 @@
         };
         
         img.onerror = function() {
+            // If image fails to load, no drawable area
             resizeCanvas();
+            
+            // Show message in center
+            ctx.fillStyle = '#999';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('1.png not found', canvas.width/2, canvas.height/2);
+            ctx.fillText('Cannot draw without image', canvas.width/2, canvas.height/2 + 30);
         };
         
         // Handle window resize
@@ -89,12 +103,26 @@
         
         img.src = '1.png';
         
-        // Check if pixel is drawable (no frame restriction)
+        // Check if pixel is drawable (only on non-transparent pixels of the image)
         function canDrawAt(x, y) {
-            if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return false;
-            if (!imageData) return true;
-            const index = (y * canvas.width + x) * 4;
-            return imageData.data[index + 3] > 50; // Allow drawing on semi-transparent areas
+            if (!imageData) return false; // No image loaded
+            
+            // Convert canvas coordinates to image coordinates
+            const imageX = x - imageOffsetX;
+            const imageY = y - imageOffsetY;
+            
+            // Check if coordinates are within the image bounds
+            if (imageX < 0 || imageY < 0 || imageX >= imageScaledWidth || imageY >= imageScaledHeight) {
+                return false;
+            }
+            
+            // Get pixel data from the image
+            const pixelX = Math.floor(imageX);
+            const pixelY = Math.floor(imageY);
+            const index = (pixelY * imageScaledWidth + pixelX) * 4;
+            
+            // Only allow drawing on non-transparent pixels (alpha > 10)
+            return imageData.data[index + 3] > 10;
         }
         
         // Particle class for fluid simulation
