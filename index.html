@@ -285,7 +285,7 @@
         
         // Draw with brush
         function drawBrush(x, y) {
-            if (!canDrawAt(Math.floor(x), Math.floor(y))) return;
+            if (!canDrawAt(Math.floor(x), Math.floor(y))) return false;
             
             ctx.fillStyle = 'black';
             ctx.beginPath();
@@ -294,6 +294,7 @@
             
             // Spawn fluid particles
             spawnFluidParticles(x, y);
+            return true;
         }
         
         // Spawn fluid particles
@@ -370,9 +371,12 @@
                     const t = i / steps;
                     const x = lastX + dx * t;
                     const y = lastY + dy * t;
+                    
+                    // Try to draw at this position, but don't stop the stroke if it fails
                     drawBrush(x, y);
                 }
                 
+                // Always update last position, even if some brush strokes failed
                 lastX = currentX;
                 lastY = currentY;
             }
@@ -417,9 +421,12 @@
                     const t = i / steps;
                     const x = lastX + dx * t;
                     const y = lastY + dy * t;
+                    
+                    // Try to draw at this position, but don't stop the stroke if it fails
                     drawBrush(x, y);
                 }
                 
+                // Always update last position, even if some brush strokes failed
                 lastX = currentX;
                 lastY = currentY;
             }
