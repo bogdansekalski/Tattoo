@@ -2,27 +2,33 @@
 <html>
 <head>
     <title>Tattoo Services</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
 </head>
 <body>
     <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20vw; font-weight: bold; z-index: -1; text-align: center; color: #ccc; line-height: 0.8;">
         TATTOO SERVICES<br>CHEAP<br>IM LEARNING
     </div>
     
-    <canvas id="canvas" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; cursor: crosshair; z-index: 10;"></canvas>
-    <canvas id="particles" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 20;"></canvas>
+    <canvas id="canvas" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 1px solid black; cursor: crosshair; z-index: 1;"></canvas>
+    <canvas id="particles" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
+    <canvas id="cable" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0;"></canvas>
     
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const particleCanvas = document.getElementById('particles');
         const particleCtx = particleCanvas.getContext('2d');
+        const cableCanvas = document.getElementById('cable');
+        const cableCtx = cableCanvas.getContext('2d');
         
         let img = new Image();
         let imageData;
-        let imageOffsetX = 0;
-        let imageOffsetY = 0;
-        let imageScaledWidth = 0;
-        let imageScaledHeight = 0;
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
@@ -43,93 +49,83 @@
         const gridSize = 20;
         let grid = {};
         
-        // Set canvas to full window size
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            particleCanvas.width = window.innerWidth;
-            particleCanvas.height = window.innerHeight;
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if (img.complete && img.naturalWidth > 0) {
-                // Center the image
-                const maxWidth = window.innerWidth * 0.6;
-                const maxHeight = window.innerHeight * 0.6;
-                let scale = Math.min(maxWidth / img.width, maxHeight / img.height);
-                
-                imageScaledWidth = img.width * scale;
-                imageScaledHeight = img.height * scale;
-                imageOffsetX = (canvas.width - imageScaledWidth) / 2;
-                imageOffsetY = (canvas.height - imageScaledHeight) / 2;
-                
-                ctx.drawImage(img, imageOffsetX, imageOffsetY, imageScaledWidth, imageScaledHeight);
-                
-                // Get image data only for the image area for alpha checking
-                imageData = ctx.getImageData(imageOffsetX, imageOffsetY, imageScaledWidth, imageScaledHeight);
-            } else {
-                // No image loaded - no drawable area
-                imageData = null;
-                imageScaledWidth = 0;
-                imageScaledHeight = 0;
-                imageOffsetX = 0;
-                imageOffsetY = 0;
-            }
+        // Cable physics
+        const cableSegments = 20;
+        const segmentLength = 30;
+        let cablePoints = [];
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        
+        // Initialize cable points
+        for (let i = 0; i < cableSegments; i++) {
+            cablePoints.push({
+                x: window.innerWidth - 50,
+                y: 50 + i * segmentLength,
+                vx: 0,
+                vy: 0,
+                oldX: window.innerWidth - 50,
+                oldY: 50 + i * segmentLength
+            });
         }
+        
+        // Set particle canvas to window size
+        particleCanvas.width = window.innerWidth;
+        particleCanvas.height = window.innerHeight;
+        cableCanvas.width = window.innerWidth;
+        cableCanvas.height = window.innerHeight;
         
         // Load image without frame requirement
         img.onload = function() {
-            resizeCanvas();
+            const maxWidth = window.innerWidth * 0.6;
+            const maxHeight = window.innerHeight * 0.6;
+            
+            let scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+            
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         };
         
         img.onerror = function() {
-            // If image fails to load, no drawable area
-            resizeCanvas();
+            const maxWidth = window.innerWidth * 0.6;
+            const maxHeight = window.innerHeight * 0.6;
             
-            // Show message in center
-            ctx.fillStyle = '#999';
-            ctx.font = '24px Arial';
+            canvas.width = Math.min(500, maxWidth);
+            canvas.height = Math.min(500, maxHeight);
+            
+            ctx.fillStyle = '#f8f8f8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#333';
+            ctx.font = '16px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('1.png not found', canvas.width/2, canvas.height/2);
-            ctx.fillText('Cannot draw without image', canvas.width/2, canvas.height/2 + 30);
+            ctx.fillText('Image not found - Draw anywhere!', canvas.width/2, canvas.height/2);
+            
+            // Create fake image data for drawing anywhere
+            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                imageData.data[i + 3] = 255; // Make all pixels drawable
+            }
         };
-        
-        // Handle window resize
-        window.addEventListener('resize', resizeCanvas);
-        
-        // Initial resize
-        resizeCanvas();
         
         img.src = '1.png';
         
-        // Check if pixel is drawable (only on non-transparent pixels of the image)
+        // Check if pixel is drawable (no frame restriction)
         function canDrawAt(x, y) {
-            if (!imageData) return false; // No image loaded
-            
-            // Convert canvas coordinates to image coordinates
-            const imageX = x - imageOffsetX;
-            const imageY = y - imageOffsetY;
-            
-            // Check if coordinates are within the image bounds
-            if (imageX < 0 || imageY < 0 || imageX >= imageScaledWidth || imageY >= imageScaledHeight) {
-                return false;
-            }
-            
-            // Get pixel data from the image
-            const pixelX = Math.floor(imageX);
-            const pixelY = Math.floor(imageY);
-            const index = (pixelY * imageScaledWidth + pixelX) * 4;
-            
-            // Only allow drawing on non-transparent pixels (alpha > 10)
-            return imageData.data[index + 3] > 10;
+            if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return false;
+            if (!imageData) return true;
+            const index = (y * canvas.width + x) * 4;
+            return imageData.data[index + 3] > 50; // Allow drawing on semi-transparent areas
         }
         
         // Particle class for fluid simulation
         class FluidParticle {
             constructor(x, y) {
-                this.x = x;
-                this.y = y;
+                // Convert canvas coordinates to window coordinates
+                const rect = canvas.getBoundingClientRect();
+                this.x = rect.left + x;
+                this.y = rect.top + y;
                 this.vx = (Math.random() - 0.5) * 4;
                 this.vy = Math.random() * -3 - 1;
                 this.life = 600 + Math.random() * 300;
@@ -160,21 +156,17 @@
                 this.x += this.vx;
                 this.y += this.vy;
                 
-                // Boundary collision with smooth edge behavior
+                // Boundary collision with window edges
                 if (this.x < this.size) {
                     this.x = this.size;
-                    this.vx *= -0.4;
+                    this.vx *= -0.3;
                 }
-                if (this.x > canvas.width - this.size) {
-                    this.x = canvas.width - this.size;
-                    this.vx *= -0.4;
+                if (this.x > window.innerWidth - this.size) {
+                    this.x = window.innerWidth - this.size;
+                    this.vx *= -0.3;
                 }
-                if (this.y < this.size) {
-                    this.y = this.size;
-                    this.vy *= -0.3;
-                }
-                if (this.y > canvas.height - this.size) {
-                    this.y = canvas.height - this.size;
+                if (this.y > window.innerHeight - this.size) {
+                    this.y = window.innerHeight - this.size;
                     this.vy *= -0.2;
                     this.vx *= 0.8; // Friction on ground
                 }
@@ -283,9 +275,95 @@
             });
         }
         
+        // Update cable physics
+        function updateCable() {
+            // Update first point to follow mouse
+            cablePoints[0].x = mouseX;
+            cablePoints[0].y = mouseY;
+            
+            // Verlet integration for other points
+            for (let i = 1; i < cablePoints.length; i++) {
+                const point = cablePoints[i];
+                const tempX = point.x;
+                const tempY = point.y;
+                
+                // Apply gravity and damping
+                point.x += (point.x - point.oldX) * 0.95;
+                point.y += (point.y - point.oldY) * 0.95 + 0.5;
+                
+                point.oldX = tempX;
+                point.oldY = tempY;
+            }
+            
+            // Constraint solving
+            for (let j = 0; j < 3; j++) { // Multiple iterations for stability
+                for (let i = 0; i < cablePoints.length - 1; i++) {
+                    const p1 = cablePoints[i];
+                    const p2 = cablePoints[i + 1];
+                    
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 0) {
+                        const diff = segmentLength - dist;
+                        const percent = diff / dist / 2;
+                        const offsetX = dx * percent;
+                        const offsetY = dy * percent;
+                        
+                        if (i !== 0) {
+                            p1.x -= offsetX;
+                            p1.y -= offsetY;
+                        }
+                        p2.x += offsetX;
+                        p2.y += offsetY;
+                    }
+                }
+            }
+        }
+        
+        // Draw cable
+        function drawCable() {
+            cableCtx.clearRect(0, 0, cableCanvas.width, cableCanvas.height);
+            
+            if (cablePoints.length < 2) return;
+            
+            // Draw cable shadow
+            cableCtx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            cableCtx.lineWidth = 12;
+            cableCtx.lineCap = 'round';
+            cableCtx.lineJoin = 'round';
+            cableCtx.beginPath();
+            cableCtx.moveTo(cablePoints[0].x + 2, cablePoints[0].y + 2);
+            for (let i = 1; i < cablePoints.length; i++) {
+                cableCtx.lineTo(cablePoints[i].x + 2, cablePoints[i].y + 2);
+            }
+            cableCtx.stroke();
+            
+            // Draw main cable
+            cableCtx.strokeStyle = '#222';
+            cableCtx.lineWidth = 8;
+            cableCtx.beginPath();
+            cableCtx.moveTo(cablePoints[0].x, cablePoints[0].y);
+            for (let i = 1; i < cablePoints.length; i++) {
+                cableCtx.lineTo(cablePoints[i].x, cablePoints[i].y);
+            }
+            cableCtx.stroke();
+            
+            // Draw cable highlights
+            cableCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            cableCtx.lineWidth = 2;
+            cableCtx.beginPath();
+            cableCtx.moveTo(cablePoints[0].x - 2, cablePoints[0].y - 2);
+            for (let i = 1; i < cablePoints.length; i++) {
+                cableCtx.lineTo(cablePoints[i].x - 2, cablePoints[i].y - 2);
+            }
+            cableCtx.stroke();
+        }
+        
         // Draw with brush
         function drawBrush(x, y) {
-            if (!canDrawAt(Math.floor(x), Math.floor(y))) return false;
+            if (!canDrawAt(Math.floor(x), Math.floor(y))) return;
             
             ctx.fillStyle = 'black';
             ctx.beginPath();
@@ -294,7 +372,6 @@
             
             // Spawn fluid particles
             spawnFluidParticles(x, y);
-            return true;
         }
         
         // Spawn fluid particles
@@ -320,6 +397,10 @@
         function animate() {
             particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
             
+            // Update and draw cable
+            updateCable();
+            drawCable();
+            
             // Calculate fluid forces
             if (particles.length > 1) {
                 calculateFluidForces();
@@ -342,6 +423,12 @@
         
         // Start animation
         animate();
+        
+        // Track mouse position for cable
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
         
         // Mouse events
         canvas.addEventListener('mousedown', (e) => {
@@ -371,12 +458,9 @@
                     const t = i / steps;
                     const x = lastX + dx * t;
                     const y = lastY + dy * t;
-                    
-                    // Try to draw at this position, but don't stop the stroke if it fails
                     drawBrush(x, y);
                 }
                 
-                // Always update last position, even if some brush strokes failed
                 lastX = currentX;
                 lastY = currentY;
             }
@@ -399,6 +483,10 @@
             lastY = touch.clientY - rect.top;
             isDrawing = true;
             drawBrush(lastX, lastY);
+            
+            // Update cable position for touch
+            mouseX = touch.clientX;
+            mouseY = touch.clientY;
         });
         
         canvas.addEventListener('touchmove', (e) => {
@@ -409,6 +497,10 @@
             const touch = e.touches[0];
             const currentX = touch.clientX - rect.left;
             const currentY = touch.clientY - rect.top;
+            
+            // Update cable position for touch
+            mouseX = touch.clientX;
+            mouseY = touch.clientY;
             
             const dx = currentX - lastX;
             const dy = currentY - lastY;
@@ -421,12 +513,9 @@
                     const t = i / steps;
                     const x = lastX + dx * t;
                     const y = lastY + dy * t;
-                    
-                    // Try to draw at this position, but don't stop the stroke if it fails
                     drawBrush(x, y);
                 }
                 
-                // Always update last position, even if some brush strokes failed
                 lastX = currentX;
                 lastY = currentY;
             }
@@ -435,6 +524,14 @@
         canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
             isDrawing = false;
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+            cableCanvas.width = window.innerWidth;
+            cableCanvas.height = window.innerHeight;
         });
     </script>
 </body>
