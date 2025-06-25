@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tattoo Services</title>
+</head>
+<body>
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20vw; font-weight: bold; z-index: -1; text-align: center; color: #ccc; line-height: 0.8;">
+        TATTOO SERVICES<br>CHEAP<br>IM LEARNING
+    </div>
+    
+    <canvas id="canvas" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 1px solid black; cursor: crosshair;"></canvas>
+    <canvas id="particles" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const particleCanvas = document.getElementById('particles');
+        const particleCtx = particleCanvas.getContext('2d');
+        
+        let img = new Image();
+        let imageData;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let distanceDrawn = 0;
+        const brushSpacing = 0.75; // 75% spacing
+        const brushSize = 3;
+        
+        // Blood particles array
+        let particles = [];
+        
+        // Load image
+        img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            particleCanvas.width = img.width;
+            particleCanvas.height = img.height;
+            
+            ctx.drawImage(img, 0, 0);
+            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        };
+        
+        img.onerror = function() {
+            // If image fails to load, create a placeholder
+            canvas.width = 400;
+            canvas.height = 400;
+            particleCanvas.width = 400;
+            particleCanvas.height = 400;
+            
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, 400, 400);
+            ctx.fillStyle = '#333';
+            ctx.font = '20px monospace';
+            ctx.fillText('1.png not found', 120, 200);
+            ctx.fillText('Draw here anyway!', 100, 230);
+            
+            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        };
+        
+        img.src = '1.png';
+        
+        // Check if pixel is not transparent
+        function canDrawAt(x, y) {
+            if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return false;
+            const index = (y * canvas.width + x) * 4;
+            return imageData.data[index + 3] > 0; // Alpha channel > 0
+        }
+        
+        // Draw with spacing
+        function drawBrush(x, y) {
+            if (!canDrawAt(Math.floor(x), Math.floor(y))) return;
+            
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(x, y, brushSize, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Spawn blood particles
+            spawnBloodParticles(x, y);
+        }
+        
+        // Spawn blood particles
+        function spawnBloodParticles(x, y) {
+            // Spawn fewer particles more frequently for smoother flow
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x: x + (Math.random() - 0.5) * brushSize,
+                    y: y + (Math.random() - 0.5) * brushSize,
+                    vx: (Math.random() - 0.5) * 6,
+                    vy: Math.random() * -5 - 2,
+                    gravity: 0.5,
+                    life: 480, // 8 seconds at 60fps
+                    maxLife: 480,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+        
+        // Update and draw particles
+        let animationId;
+        function updateParticles() {
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += p.gravity;
+                p.life--;
+                
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                
+                particleCtx.fillStyle = `rgba(180, 0, 0, ${Math.min(1, (p.life / p.maxLife) * 1.5)})`;
+                particleCtx.beginPath();
+                particleCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                particleCtx.fill();
+            }
+            
+            if (particles.length > 0) {
+                animationId = requestAnimationFrame(updateParticles);
+            }
+        }
+        
+        // Start continuous animation loop
+        function startAnimation() {
+            if (!animationId) {
+                updateParticles();
+            }
+        }
+        startAnimation();
+        
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            distanceDrawn = 0;
+            drawBrush(lastX, lastY);
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            // Calculate distance
+            const dx = currentX - lastX;
+            const dy = currentY - lastY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0) {
+                // Calculate how many brush stamps we need
+                const steps = Math.max(1, Math.floor(distance / (brushSize * 2 * brushSpacing)));
+                
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const x = lastX + dx * t;
+                    const y = lastY + dy * t;
+                    drawBrush(x, y);
+                }
+                
+                lastX = currentX;
+                lastY = currentY;
+            }
+            
+            updateParticles();
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+    </script>
+</body>
+</html>
