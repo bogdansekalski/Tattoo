@@ -294,8 +294,8 @@
         
         // Update cable physics
         function updateCable() {
-            // Update first point to follow mouse
-            cablePoints[0].x = mouseX;
+            // Update first point to follow mouse with 30px offset to the right
+            cablePoints[0].x = mouseX + 30;
             cablePoints[0].y = mouseY;
             
             // Verlet integration for other points
