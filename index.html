@@ -15,9 +15,9 @@
         TATTOO SERVICES<br>CHEAP<br>IM LEARNING
     </div>
     
-    <canvas id="canvas" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 1px solid black; cursor: crosshair; z-index: 1;"></canvas>
-    <canvas id="particles" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
-    <canvas id="cable" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0;"></canvas>
+    <canvas id="canvas" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); cursor: crosshair; z-index: 1;"></canvas>
+    <canvas id="particles" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3;"></canvas>
+    <canvas id="cable" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
     
     <script>
         const canvas = document.getElementById('canvas');
@@ -50,7 +50,7 @@
         let grid = {};
         
         // Cable physics
-        const cableSegments = 20;
+        const cableSegments = 40;
         const segmentLength = 30;
         let cablePoints = [];
         let mouseX = window.innerWidth / 2;
