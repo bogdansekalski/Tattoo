@@ -18,6 +18,7 @@
     <canvas id="canvas" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); cursor: crosshair; z-index: 1;"></canvas>
     <canvas id="particles" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3;"></canvas>
     <canvas id="cable" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></canvas>
+    <canvas id="machine" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4;"></canvas>
     
     <script>
         const canvas = document.getElementById('canvas');
@@ -26,8 +27,11 @@
         const particleCtx = particleCanvas.getContext('2d');
         const cableCanvas = document.getElementById('cable');
         const cableCtx = cableCanvas.getContext('2d');
+        const machineCanvas = document.getElementById('machine');
+        const machineCtx = machineCanvas.getContext('2d');
         
         let img = new Image();
+        let machineImg = new Image();
         let imageData;
         let isDrawing = false;
         let lastX = 0;
@@ -68,13 +72,26 @@
             });
         }
         
-        // Set particle canvas to window size
+        // Set canvas sizes to window size
         particleCanvas.width = window.innerWidth;
         particleCanvas.height = window.innerHeight;
         cableCanvas.width = window.innerWidth;
         cableCanvas.height = window.innerHeight;
+        machineCanvas.width = window.innerWidth;
+        machineCanvas.height = window.innerHeight;
         
-        // Load image without frame requirement
+        // Load tattoo machine image
+        machineImg.onload = function() {
+            console.log('Tattoo machine image loaded successfully');
+        };
+        
+        machineImg.onerror = function() {
+            console.log('Could not load maszynka.png');
+        };
+        
+        machineImg.src = 'maszynka.png';
+        
+        // Load main image without frame requirement
         img.onload = function() {
             const maxWidth = window.innerWidth * 0.6;
             const maxHeight = window.innerHeight * 0.6;
@@ -128,7 +145,7 @@
                 this.y = rect.top + y;
                 this.vx = (Math.random() - 0.5) * 4;
                 this.vy = Math.random() * -3 - 1;
-                this.life = 600 + Math.random() * 300;
+                this.life = 60; // Changed to 1 second (60 frames at 60fps)
                 this.maxLife = this.life;
                 this.size = Math.random() * 3 + 1.5;
                 this.density = 1;
@@ -361,6 +378,41 @@
             cableCtx.stroke();
         }
         
+        // Draw tattoo machine
+        function drawMachine() {
+            machineCtx.clearRect(0, 0, machineCanvas.width, machineCanvas.height);
+            
+            if (machineImg.complete && machineImg.naturalWidth > 0) {
+                // Calculate machine size and position
+                const machineSize = 100; // Adjust size as needed
+                const machineX = mouseX - machineSize / 2;
+                const machineY = mouseY - machineSize / 2;
+                
+                // Add slight shadow
+                machineCtx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                machineCtx.shadowBlur = 10;
+                machineCtx.shadowOffsetX = 3;
+                machineCtx.shadowOffsetY = 3;
+                
+                // Draw the tattoo machine
+                machineCtx.drawImage(machineImg, machineX, machineY, machineSize, machineSize);
+                
+                // Reset shadow
+                machineCtx.shadowColor = 'transparent';
+                machineCtx.shadowBlur = 0;
+                machineCtx.shadowOffsetX = 0;
+                machineCtx.shadowOffsetY = 0;
+            } else {
+                // Fallback if image doesn't load - draw a simple machine shape
+                machineCtx.fillStyle = '#333';
+                machineCtx.fillRect(mouseX - 20, mouseY - 40, 40, 60);
+                machineCtx.fillStyle = '#666';
+                machineCtx.fillRect(mouseX - 15, mouseY - 35, 30, 20);
+                machineCtx.fillStyle = '#999';
+                machineCtx.fillRect(mouseX - 2, mouseY + 15, 4, 15);
+            }
+        }
+        
         // Draw with brush
         function drawBrush(x, y) {
             if (!canDrawAt(Math.floor(x), Math.floor(y))) return;
@@ -401,6 +453,9 @@
             updateCable();
             drawCable();
             
+            // Draw tattoo machine
+            drawMachine();
+            
             // Calculate fluid forces
             if (particles.length > 1) {
                 calculateFluidForces();
@@ -424,7 +479,7 @@
         // Start animation
         animate();
         
-        // Track mouse position for cable
+        // Track mouse position for cable and machine
         document.addEventListener('mousemove', (e) => {
             mouseX = e.clientX;
             mouseY = e.clientY;
@@ -484,7 +539,7 @@
             isDrawing = true;
             drawBrush(lastX, lastY);
             
-            // Update cable position for touch
+            // Update positions for touch
             mouseX = touch.clientX;
             mouseY = touch.clientY;
         });
@@ -498,7 +553,7 @@
             const currentX = touch.clientX - rect.left;
             const currentY = touch.clientY - rect.top;
             
-            // Update cable position for touch
+            // Update positions for touch
             mouseX = touch.clientX;
             mouseY = touch.clientY;
             
@@ -532,6 +587,8 @@
             particleCanvas.height = window.innerHeight;
             cableCanvas.width = window.innerWidth;
             cableCanvas.height = window.innerHeight;
+            machineCanvas.width = window.innerWidth;
+            machineCanvas.height = window.innerHeight;
         });
     </script>
 </body>
