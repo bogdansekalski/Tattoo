@@ -44,9 +44,9 @@
         const brushSpacing = 0.75;
         const brushSize = 3;
         
-        // Fluid simulation parameters - optimized for Safari
+        // Fluid simulation parameters - heavily optimized for Safari
         let particles = [];
-        const maxParticles = 800; // Reduced from 2000
+        const maxParticles = 400; // Further reduced from 800
         const viscosity = 0.92;
         const gravity = 0.4;
         const cohesion = 0.6;
@@ -54,18 +54,25 @@
         const surfaceTension = 0.1;
         
         // Spatial grid for optimization
-        const gridSize = 25; // Larger grid for fewer calculations
+        const gridSize = 30; // Larger grid for fewer calculations
         let grid = {};
-        let frameCount = 0; // For performance throttling
+        let frameCount = 0;
         
-        // Cable physics
-        const cableSegments = 40;
-        const segmentLength = 30;
+        // Cable physics - simplified for Safari
+        const cableSegments = 20; // Reduced from 40
+        const segmentLength = 25; // Reduced from 30
         let cablePoints = [];
         let mouseX = window.innerWidth / 2;
         let mouseY = window.innerHeight / 2;
+        let targetMouseX = mouseX;
+        let targetMouseY = mouseY;
         
-        // Initialize cable points
+        // Cable optimization variables
+        let cableUpdateCounter = 0;
+        let lastCableUpdate = 0;
+        const cableUpdateInterval = 16; // Update every 16ms (60fps max)
+        
+        // Initialize cable points with simpler physics
         for (let i = 0; i < cableSegments; i++) {
             cablePoints.push({
                 x: window.innerWidth - 50,
@@ -73,7 +80,8 @@
                 vx: 0,
                 vy: 0,
                 oldX: window.innerWidth - 50,
-                oldY: 50 + i * segmentLength
+                oldY: 50 + i * segmentLength,
+                pinned: i === 0 // Only first point is pinned
             });
         }
         
@@ -133,26 +141,25 @@
         
         img.src = '1.png';
         
-        // Check if pixel is drawable (no frame restriction)
+        // Check if pixel is drawable
         function canDrawAt(x, y) {
             if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return false;
             if (!imageData) return true;
             const index = (y * canvas.width + x) * 4;
-            return imageData.data[index + 3] > 50; // Allow drawing on semi-transparent areas
+            return imageData.data[index + 3] > 50;
         }
         
-        // Particle class for fluid simulation - Safari optimized
+        // Particle class - further optimized for Safari
         class FluidParticle {
             constructor(x, y) {
-                // Convert canvas coordinates to window coordinates
                 const rect = canvas.getBoundingClientRect();
                 this.x = rect.left + x;
                 this.y = rect.top + y;
-                this.vx = (Math.random() - 0.5) * 3;
-                this.vy = Math.random() * -2 - 0.5;
-                this.life = 45; // Reduced lifespan
+                this.vx = (Math.random() - 0.5) * 2; // Reduced velocity
+                this.vy = Math.random() * -1.5 - 0.5;
+                this.life = 30; // Further reduced lifespan
                 this.maxLife = this.life;
-                this.size = Math.random() * 2.5 + 1;
+                this.size = Math.random() * 2 + 1;
                 this.density = 1;
                 this.pressure = 0;
                 this.viscosityForce = { x: 0, y: 0 };
@@ -164,12 +171,12 @@
                 this.life--;
                 
                 // Apply gravity
-                this.vy += gravity;
+                this.vy += gravity * 0.8; // Reduced gravity effect
                 
-                // Apply fluid forces (only every other frame for performance)
-                if (frameCount % 2 === 0) {
-                    this.vx += this.viscosityForce.x + this.cohesionForce.x + this.separationForce.x;
-                    this.vy += this.viscosityForce.y + this.cohesionForce.y + this.separationForce.y;
+                // Apply fluid forces (only every 4th frame for performance)
+                if (frameCount % 4 === 0) {
+                    this.vx += (this.viscosityForce.x + this.cohesionForce.x + this.separationForce.x) * 0.5;
+                    this.vy += (this.viscosityForce.y + this.cohesionForce.y + this.separationForce.y) * 0.5;
                 }
                 
                 // Apply viscosity (damping)
@@ -202,8 +209,8 @@
             }
             
             draw() {
-                const alpha = Math.min(0.8, (this.life / this.maxLife) * 1.1);
-                const intensity = Math.min(200, 100 + (1 - alpha) * 80);
+                const alpha = Math.min(0.7, (this.life / this.maxLife) * 0.9);
+                const intensity = Math.min(180, 80 + (1 - alpha) * 60);
                 
                 // Simplified drawing - no gradient for better performance
                 particleCtx.fillStyle = `rgba(${intensity}, 0, 0, ${alpha})`;
@@ -213,7 +220,7 @@
             }
         }
         
-        // Spatial grid functions
+        // Simplified spatial grid functions
         function getGridKey(x, y) {
             return `${Math.floor(x / gridSize)},${Math.floor(y / gridSize)}`;
         }
@@ -232,6 +239,7 @@
             const gx = Math.floor(particle.x / gridSize);
             const gy = Math.floor(particle.y / gridSize);
             
+            // Only check immediate neighbors for performance
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
                     const key = `${gx + dx},${gy + dy}`;
@@ -251,26 +259,26 @@
                     }
                 }
             }
-            return nearby;
+            return nearby.slice(0, 3); // Limit to 3 nearest neighbors
         }
         
-        // Fluid simulation forces - optimized
+        // Heavily optimized fluid simulation
         function calculateFluidForces() {
-            // Only calculate forces every few frames for performance
-            if (frameCount % 3 !== 0) return;
+            // Only calculate forces every 6 frames for performance
+            if (frameCount % 6 !== 0) return;
             
             updateGrid();
             
-            // Process only a subset of particles each frame
-            const batchSize = Math.min(50, particles.length);
-            const startIndex = (frameCount / 3) % Math.max(1, Math.ceil(particles.length / batchSize)) * batchSize;
+            // Process only a small subset of particles each frame
+            const batchSize = Math.min(20, particles.length);
+            const startIndex = Math.floor((frameCount / 6) % Math.max(1, Math.ceil(particles.length / batchSize))) * batchSize;
             
             for (let i = 0; i < batchSize && startIndex + i < particles.length; i++) {
                 const particle = particles[startIndex + i];
                 const nearby = getNearbyParticles(particle);
                 
-                // Limit nearby particle interactions
-                const maxInteractions = Math.min(5, nearby.length);
+                // Limit interactions to maximum 2 particles
+                const maxInteractions = Math.min(2, nearby.length);
                 
                 for (let j = 0; j < maxInteractions; j++) {
                     const { particle: other, distance } = nearby[j];
@@ -278,15 +286,15 @@
                         const dx = (particle.x - other.x) / distance;
                         const dy = (particle.y - other.y) / distance;
                         
-                        // Simplified forces
+                        // Simplified forces with reduced strength
                         if (distance < separation * 0.6) {
-                            const force = (separation * 0.6 - distance) * 0.05;
+                            const force = (separation * 0.6 - distance) * 0.02;
                             particle.separationForce.x += dx * force;
                             particle.separationForce.y += dy * force;
                         }
                         
                         if (distance < separation && distance > separation * 0.4) {
-                            const force = cohesion * 0.01;
+                            const force = cohesion * 0.005;
                             particle.cohesionForce.x -= dx * force;
                             particle.cohesionForce.y -= dy * force;
                         }
@@ -295,28 +303,37 @@
             }
         }
         
-        // Update cable physics
+        // Simplified cable physics for Safari
         function updateCable() {
-            // Update first point to follow mouse with 30px offset to the right
-            cablePoints[0].x = mouseX + 30;
-            cablePoints[0].y = mouseY;
+            const now = Date.now();
+            if (now - lastCableUpdate < cableUpdateInterval) return;
+            lastCableUpdate = now;
             
-            // Verlet integration for other points
+            // Smooth mouse following with interpolation
+            targetMouseX += (mouseX - targetMouseX) * 0.15;
+            targetMouseY += (mouseY - targetMouseY) * 0.15;
+            
+            // Update first point to follow smoothed mouse position
+            cablePoints[0].x = targetMouseX + 30;
+            cablePoints[0].y = targetMouseY;
+            
+            // Simplified Verlet integration
             for (let i = 1; i < cablePoints.length; i++) {
                 const point = cablePoints[i];
                 const tempX = point.x;
                 const tempY = point.y;
                 
-                // Apply gravity and damping
-                point.x += (point.x - point.oldX) * 0.95;
-                point.y += (point.y - point.oldY) * 0.95 + 0.5;
+                // Reduced physics calculations
+                const dampingFactor = 0.96; // Increased damping for stability
+                point.x += (point.x - point.oldX) * dampingFactor;
+                point.y += (point.y - point.oldY) * dampingFactor + 0.3; // Reduced gravity
                 
                 point.oldX = tempX;
                 point.oldY = tempY;
             }
             
-            // Constraint solving
-            for (let j = 0; j < 3; j++) { // Multiple iterations for stability
+            // Simplified constraint solving - only 2 iterations
+            for (let j = 0; j < 2; j++) {
                 for (let i = 0; i < cablePoints.length - 1; i++) {
                     const p1 = cablePoints[i];
                     const p2 = cablePoints[i + 1];
@@ -325,44 +342,44 @@
                     const dy = p2.y - p1.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     
-                    if (dist > 0) {
+                    if (dist > 0.1) { // Avoid division by very small numbers
                         const diff = segmentLength - dist;
-                        const percent = diff / dist / 2;
+                        const percent = (diff / dist) * 0.5; // Reduced correction strength
                         const offsetX = dx * percent;
                         const offsetY = dy * percent;
                         
-                        if (i !== 0) {
-                            p1.x -= offsetX;
-                            p1.y -= offsetY;
+                        if (i !== 0) { // Don't move the first point
+                            p1.x -= offsetX * 0.5;
+                            p1.y -= offsetY * 0.5;
                         }
-                        p2.x += offsetX;
-                        p2.y += offsetY;
+                        p2.x += offsetX * 0.5;
+                        p2.y += offsetY * 0.5;
                     }
                 }
             }
         }
         
-        // Draw cable
+        // Optimized cable drawing
         function drawCable() {
             cableCtx.clearRect(0, 0, cableCanvas.width, cableCanvas.height);
             
             if (cablePoints.length < 2) return;
             
-            // Draw cable shadow
-            cableCtx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-            cableCtx.lineWidth = 12;
+            // Draw cable shadow (simplified)
+            cableCtx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            cableCtx.lineWidth = 10;
             cableCtx.lineCap = 'round';
             cableCtx.lineJoin = 'round';
             cableCtx.beginPath();
-            cableCtx.moveTo(cablePoints[0].x + 2, cablePoints[0].y + 2);
+            cableCtx.moveTo(cablePoints[0].x + 1, cablePoints[0].y + 1);
             for (let i = 1; i < cablePoints.length; i++) {
-                cableCtx.lineTo(cablePoints[i].x + 2, cablePoints[i].y + 2);
+                cableCtx.lineTo(cablePoints[i].x + 1, cablePoints[i].y + 1);
             }
             cableCtx.stroke();
             
             // Draw main cable
             cableCtx.strokeStyle = '#222';
-            cableCtx.lineWidth = 8;
+            cableCtx.lineWidth = 6;
             cableCtx.beginPath();
             cableCtx.moveTo(cablePoints[0].x, cablePoints[0].y);
             for (let i = 1; i < cablePoints.length; i++) {
@@ -370,34 +387,41 @@
             }
             cableCtx.stroke();
             
-            // Draw cable highlights
-            cableCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            cableCtx.lineWidth = 2;
+            // Simplified highlight
+            cableCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            cableCtx.lineWidth = 1;
             cableCtx.beginPath();
-            cableCtx.moveTo(cablePoints[0].x - 2, cablePoints[0].y - 2);
+            cableCtx.moveTo(cablePoints[0].x - 1, cablePoints[0].y - 1);
             for (let i = 1; i < cablePoints.length; i++) {
-                cableCtx.lineTo(cablePoints[i].x - 2, cablePoints[i].y - 2);
+                cableCtx.lineTo(cablePoints[i].x - 1, cablePoints[i].y - 1);
             }
             cableCtx.stroke();
         }
         
-        // Draw tattoo machine
+        // Draw tattoo machine (cached for performance)
+        let machineDrawCache = null;
+        let lastMachineX = -1;
+        let lastMachineY = -1;
+        
         function drawMachine() {
+            // Only redraw if machine moved significantly
+            if (Math.abs(mouseX - lastMachineX) < 2 && Math.abs(mouseY - lastMachineY) < 2) {
+                return;
+            }
+            
             machineCtx.clearRect(0, 0, machineCanvas.width, machineCanvas.height);
             
             if (machineImg.complete && machineImg.naturalWidth > 0) {
-                // Calculate machine size and position
-                const machineSize = 100; // Adjust size as needed
+                const machineSize = 80; // Slightly smaller for performance
                 const machineX = mouseX - machineSize / 2;
                 const machineY = mouseY - machineSize / 2;
                 
-                // Add slight shadow
-                machineCtx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-                machineCtx.shadowBlur = 10;
-                machineCtx.shadowOffsetX = 3;
-                machineCtx.shadowOffsetY = 3;
+                // Simplified shadow
+                machineCtx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                machineCtx.shadowBlur = 5;
+                machineCtx.shadowOffsetX = 2;
+                machineCtx.shadowOffsetY = 2;
                 
-                // Draw the tattoo machine
                 machineCtx.drawImage(machineImg, machineX, machineY, machineSize, machineSize);
                 
                 // Reset shadow
@@ -406,14 +430,17 @@
                 machineCtx.shadowOffsetX = 0;
                 machineCtx.shadowOffsetY = 0;
             } else {
-                // Fallback if image doesn't load - draw a simple machine shape
+                // Simplified fallback
                 machineCtx.fillStyle = '#333';
-                machineCtx.fillRect(mouseX - 20, mouseY - 40, 40, 60);
+                machineCtx.fillRect(mouseX - 15, mouseY - 30, 30, 45);
                 machineCtx.fillStyle = '#666';
-                machineCtx.fillRect(mouseX - 15, mouseY - 35, 30, 20);
+                machineCtx.fillRect(mouseX - 12, mouseY - 25, 24, 15);
                 machineCtx.fillStyle = '#999';
-                machineCtx.fillRect(mouseX - 2, mouseY + 15, 4, 15);
+                machineCtx.fillRect(mouseX - 1, mouseY + 10, 2, 10);
             }
+            
+            lastMachineX = mouseX;
+            lastMachineY = mouseY;
         }
         
         // Draw with brush
@@ -425,60 +452,73 @@
             ctx.arc(x, y, brushSize, 0, Math.PI * 2);
             ctx.fill();
             
-            // Spawn fluid particles
+            // Spawn fewer fluid particles
             spawnFluidParticles(x, y);
         }
         
-        // Spawn fluid particles - reduced count
+        // Optimized particle spawning
         function spawnFluidParticles(x, y) {
-            const spawnCount = Math.min(2, maxParticles - particles.length); // Reduced from 5 to 2
+            const spawnCount = Math.min(1, maxParticles - particles.length); // Only 1 particle per draw
             
             for (let i = 0; i < spawnCount; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * brushSize;
+                const radius = Math.random() * brushSize * 0.8;
                 const px = x + Math.cos(angle) * radius;
                 const py = y + Math.sin(angle) * radius;
                 
                 particles.push(new FluidParticle(px, py));
             }
             
-            // Remove old particles more aggressively
-            if (particles.length > maxParticles * 0.8) {
-                particles.splice(0, particles.length - Math.floor(maxParticles * 0.8));
+            // More aggressive particle cleanup
+            if (particles.length > maxParticles * 0.7) {
+                particles.splice(0, particles.length - Math.floor(maxParticles * 0.7));
             }
         }
         
-        // Animation loop - optimized for Safari
+        // Heavily optimized animation loop for Safari
         function animate() {
             frameCount++;
             
-            // Clear particles canvas less frequently for better performance
-            if (frameCount % 2 === 0) {
+            // Clear particles canvas less frequently
+            if (frameCount % 3 === 0) {
                 particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
             }
             
-            // Update and draw cable (less frequently)
+            // Update cable less frequently
             if (frameCount % 2 === 0) {
                 updateCable();
+            }
+            
+            // Draw cable even less frequently
+            if (frameCount % 3 === 0) {
                 drawCable();
             }
             
-            // Draw tattoo machine
-            drawMachine();
+            // Draw machine only when needed
+            if (frameCount % 2 === 0) {
+                drawMachine();
+            }
             
-            // Calculate fluid forces less frequently
-            if (particles.length > 1) {
+            // Calculate fluid forces much less frequently
+            if (particles.length > 1 && frameCount % 8 === 0) {
                 calculateFluidForces();
             }
             
-            // Update and draw particles
+            // Update and draw particles in batches
+            const particleUpdateBatch = Math.min(20, particles.length); // Process max 20 particles per frame
+            const startIndex = frameCount % Math.max(1, Math.ceil(particles.length / particleUpdateBatch)) * particleUpdateBatch;
+            
             for (let i = particles.length - 1; i >= 0; i--) {
                 const particle = particles[i];
-                particle.update();
+                
+                // Update particles in batches
+                if (i >= startIndex && i < startIndex + particleUpdateBatch) {
+                    particle.update();
+                }
                 
                 if (particle.life <= 0) {
                     particles.splice(i, 1);
-                } else {
+                } else if (frameCount % 2 === 0) { // Draw less frequently
                     particle.draw();
                 }
             }
@@ -489,10 +529,14 @@
         // Start animation
         animate();
         
-        // Track mouse position for cable and machine
+        // Throttled mouse tracking for better performance
+        let mouseUpdateThrottle = 0;
         document.addEventListener('mousemove', (e) => {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
+            if (Date.now() - mouseUpdateThrottle > 16) { // 60fps max
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                mouseUpdateThrottle = Date.now();
+            }
         });
         
         // Mouse events
@@ -549,7 +593,6 @@
             isDrawing = true;
             drawBrush(lastX, lastY);
             
-            // Update positions for touch
             mouseX = touch.clientX;
             mouseY = touch.clientY;
         });
@@ -563,7 +606,6 @@
             const currentX = touch.clientX - rect.left;
             const currentY = touch.clientY - rect.top;
             
-            // Update positions for touch
             mouseX = touch.clientX;
             mouseY = touch.clientY;
             
